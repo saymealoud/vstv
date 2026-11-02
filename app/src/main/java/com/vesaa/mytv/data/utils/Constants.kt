@@ -14,7 +14,7 @@ object Constants {
     /**
      * 应用 代码仓库
      */
-    const val APP_REPO = "https://github.com/vesaaa/vstv"
+    const val APP_REPO = "https://github.com/saymealoud/vstv"
 
     /**
      * 默认 IPTV 订阅地址（新安装自动写入设置与历史；bit.ly 短链跳转实际 m3u）
