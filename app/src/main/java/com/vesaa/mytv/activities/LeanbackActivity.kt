@@ -1,6 +1,14 @@
 package com.vesaa.mytv.activities
 
 import android.app.PictureInPictureParams
+import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.widget.Toast
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.vesaa.mytv.ui.utils.isTelevision
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
@@ -22,21 +30,64 @@ import com.vesaa.mytv.ui.theme.LeanbackTheme
 import com.vesaa.mytv.ui.utils.HttpServer
 import com.vesaa.mytv.ui.utils.SP
 
-class LeanbackActivity : ComponentActivity() {
-    override fun onUserLeaveHint() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        if (!SP.uiPipMode) return
+open class LeanbackActivity : ComponentActivity() {
+    var pipVisible by mutableStateOf(false)
+        private set
+    private var playbackEligible = false
+    private var playbackAspectRatio = 16f / 9f
+    private var lastPipParamsKey: Triple<Boolean, Float, Boolean>? = null
 
-        enterPictureInPictureMode(
-            PictureInPictureParams.Builder()
-                .setAspectRatio(Rational(16, 9))
-                .build()
-        )
+    fun supportsPip(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+        packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+    fun updatePlaybackForPip(eligible: Boolean, aspectRatio: Float) {
+        playbackEligible = eligible
+        playbackAspectRatio = if (aspectRatio.isFinite()) aspectRatio.coerceIn(0.42f, 2.39f) else 16f / 9f
+        val key = Triple(eligible, playbackAspectRatio, SP.uiPipMode)
+        if (supportsPip() && lastPipParamsKey != key) {
+            runCatching { setPictureInPictureParams(pipParams()) }
+            lastPipParamsKey = key
+        }
+    }
+
+    private fun pipParams(): PictureInPictureParams {
+        val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational((playbackAspectRatio * 1000).toInt(), 1000))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled(playbackEligible && SP.uiPipMode)
+        }
+        return builder.build()
+    }
+
+    fun enterPlayerPip(showFailure: Boolean = true) {
+        if (!supportsPip() || !playbackEligible || isFinishing) {
+            if (showFailure) Toast.makeText(this, "当前设备不支持小窗，或尚未开始单屏播放", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val entered = runCatching { enterPictureInPictureMode(pipParams()) }.getOrDefault(false)
+        if (!entered && showFailure) {
+            Toast.makeText(this, "无法进入小窗，请在系统应用设置中允许画中画", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        if (SP.uiPipMode && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            enterPlayerPip(showFailure = false)
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(inPip: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(inPip, newConfig)
+        pipVisible = inPip
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!isTelevision()) {
+            requestedOrientation = savedInstanceState?.getInt("playerOrientation")
+                ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
         try { enableEdgeToEdge() } catch (_: Exception) { /* 部分低端 ROM 不支持 */ }
         setContent {
             // 隐藏状态栏、导航栏
@@ -70,5 +121,10 @@ class LeanbackActivity : ComponentActivity() {
         HttpServer.start(applicationContext, showToast = {
             LeanbackToastState.I.showToast(it, id = "httpServer")
         })
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt("playerOrientation", requestedOrientation)
+        super.onSaveInstanceState(outState)
     }
 }
