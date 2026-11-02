@@ -1,6 +1,13 @@
 package com.vesaa.mytv.ui.screens.leanback.main.components
 
 import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalContext
+import com.vesaa.mytv.activities.LeanbackActivity
+import com.vesaa.mytv.ui.screens.mobile.MobilePlayerControls
+import com.vesaa.mytv.ui.utils.findActivity
+import com.vesaa.mytv.ui.utils.isTelevision
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -75,6 +82,10 @@ fun LeanbackMainContent(
 ) {
     val mainContentCoroutineScope = rememberCoroutineScope()
     val configuration = LocalConfiguration.current
+    val context = LocalContext.current
+    val activity = context.findActivity() as? LeanbackActivity
+    val mobileTouch = !context.isTelevision()
+    val inPip = activity?.pipVisible == true
 
     val defaultAspectRatioProvider = {
         when (settingsViewModel.videoPlayerAspectRatio) {
@@ -556,11 +567,11 @@ fun LeanbackMainContent(
     )
 
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(inPip, mobileTouch) {
         // 防止切换到其他界面时焦点丢失
         // TODO 换一个更好的解决方案
         while (true) {
-            if (!mainContentState.isPanelVisible
+            if (!inPip && !mobileTouch && !mainContentState.isPanelVisible
                 && !mainContentState.isSettingsVisible
                 && !mainContentState.isQuickPanelVisible
                 && !isSplitMode
@@ -595,6 +606,15 @@ fun LeanbackMainContent(
             !mainContentState.isQuickPanelVisible &&
             !isSplitMode
 
+    SideEffect {
+        activity?.updatePlaybackForPip(
+            !isSplitMode && videoPlayerState.currentMediaUrl.isNotBlank() && videoPlayerState.error == null &&
+                !mainContentState.isPanelVisible && !mainContentState.isSettingsVisible &&
+                !mainContentState.isQuickPanelVisible && !mainContentState.iptvSourceQuickPickVisible,
+            videoPlayerState.aspectRatio,
+        )
+    }
+
     val liveDpadVerticalChannel: ((isUp: Boolean) -> Unit)? = remember(
         videoFocusEnabled,
         panelChannelNoSelectState.channelNo,
@@ -613,6 +633,11 @@ fun LeanbackMainContent(
         } else {
             null
         }
+    }
+
+    if (inPip) {
+        LeanbackVideoScreen(state = videoPlayerState, modifier = modifier)
+        return
     }
 
     LeanbackBackPressHandledArea(
@@ -703,13 +728,28 @@ fun LeanbackMainContent(
                             }
                         },
                         onLongDown = { mainContentState.isQuickPanelVisible = true },
+                        pointerTapEnabled = !mobileTouch,
                     )
-                    .handleLeanbackDragGestures(
+                    .then(if (mobileTouch) Modifier else Modifier.handleLeanbackDragGestures(
                         onSwipeDown = { changeActivePaneChannel(false) },
                         onSwipeUp = { changeActivePaneChannel(true) },
                         onSwipeRight = { changeActivePaneLine(true) },
                         onSwipeLeft = { changeActivePaneLine(false) },
-                    ),
+                    )),
+            )
+        }
+
+        if (mobileTouch && activity != null && videoFocusEnabled &&
+            !mainContentState.isTempPanelVisible && !mainContentState.iptvSourceQuickPickVisible) {
+            MobilePlayerControls(
+                activity = activity,
+                channelName = mainContentState.currentIptv.channelName,
+                onPrevious = { changeActivePaneChannel(true) },
+                onNext = { changeActivePaneChannel(false) },
+                onChannels = { mainContentState.isPanelVisible = true },
+                onMenu = { mainContentState.isQuickPanelVisible = true },
+                onSources = { mainContentState.iptvSourceQuickPickVisible = true },
+                onLineSwipe = { changeActivePaneLine(it) },
             )
         }
 
@@ -825,7 +865,7 @@ fun LeanbackMainContent(
             LeanbackMonitorScreen()
         }
 
-        if (!mainContentState.isQuickPanelVisible && !mainContentState.isSettingsVisible) {
+        if (!mobileTouch && !mainContentState.isQuickPanelVisible && !mainContentState.isSettingsVisible) {
             // 全局左下角触摸入口：单屏/分屏统一支持双击（兼容模拟器）与长按唤起快捷面板。
             Box(
                 modifier = Modifier
@@ -858,7 +898,9 @@ fun LeanbackBackPressHandledArea(
     /** 直播全屏时上下键换台；在根节点拦截，避免 SurfaceView/AndroidView 抢走按键后 Compose 收不到 */
     onLiveDpadVertical: ((isUp: Boolean) -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
-) = Box(
+) {
+    BackHandler(onBack = onBackPressed)
+    Box(
     modifier = Modifier
         .onPreviewKeyEvent {
             if (it.key == Key.Back && it.type == KeyEventType.KeyUp) {
@@ -883,7 +925,8 @@ fun LeanbackBackPressHandledArea(
         }
         .then(modifier),
     content = content,
-)
+    )
+}
 
 private fun applyDefaultIptvSourceSelection(
     picked: String,
