@@ -12,6 +12,8 @@ permissions:
 
 jobs:
   release:
+    # Mobile test releases use the portable APK workflow and do not require production signing.
+    if: ${{ !contains(github.ref_name, '-mobile.') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
