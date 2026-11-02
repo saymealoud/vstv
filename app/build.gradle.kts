@@ -85,6 +85,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".mobiletest"
+            versionNameSuffix = "-mobile-test"
+            resValue("string", "app_name", "VsTV 手机测试版")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -184,7 +189,10 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer.rtsp)
     implementation(libs.androidx.media3.datasource.rtmp)
     implementation(libs.androidx.media3.ui)
-    implementation(libs.jellyfin.media3.ffmpeg.decoder)
+    // Portable test builds use platform codecs without requiring the author's GitHub Packages access.
+    if (!project.hasProperty("systemDecodersOnly")) {
+        implementation(libs.jellyfin.media3.ffmpeg.decoder)
+    }
     // 序列化
     implementation(libs.kotlinx.serialization)
 
