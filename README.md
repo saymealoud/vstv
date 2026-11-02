@@ -1,3 +1,5 @@
+> 本分支为手机播放器改进版，基于公开 v2.2.4 源码。操作、测试包构建与限制见 [MOBILE_PLAYER.md](MOBILE_PLAYER.md)。
+
 <div align="center">
     <h1>VsTV</h1>
     <p><strong>极致小巧 · 极速启动 · 纯净无广</strong></p>
