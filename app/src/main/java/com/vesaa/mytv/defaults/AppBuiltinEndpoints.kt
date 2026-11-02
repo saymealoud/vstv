@@ -5,7 +5,7 @@ package com.vesaa.mytv.defaults
  */
 object AppBuiltinEndpoints {
     const val GIT_RELEASE_LATEST_API =
-        "https://api.github.com/repos/vesaaa/vstv/releases/latest"
+        "https://api.github.com/repos/saymealoud/vstv/releases/latest"
 
     const val IPTV_DEFAULT_SUBSCRIPTION_URL = "https://bit.ly/jsnzkpg"
 
