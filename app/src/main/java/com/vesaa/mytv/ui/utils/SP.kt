@@ -650,7 +650,7 @@ object SP {
 
     /** 画中画模式 */
     var uiPipMode: Boolean
-        get() = sp.getBoolean(KEY.UI_PIP_MODE.name, false)
+        get() = sp.getBoolean(KEY.UI_PIP_MODE.name, !AppGlobal.applicationContext.isTelevision())
         set(value) = sp.edit().putBoolean(KEY.UI_PIP_MODE.name, value).apply()
 
     /** ==================== 更新 ==================== */
